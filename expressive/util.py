@@ -152,7 +152,7 @@ def compute_ece_sampled(hat_w_0_SBW: Tensor, w_0_BW: Tensor, ECE_bins: int, num_
     hat_w_one_hot_SBWD = F.one_hot(hat_w_0_SBW, num_classes=num_classes_w).float()
     # Distribution of w predictions (estimated by averaging over samples because diffusion models are not tractable)
     dist_hat_w_BWD = torch.mean(hat_w_one_hot_SBWD, dim=0)
-    return compute_ece(dist_hat_w_BWD, w_0_BW, ECE_bins, num_classes_w)
+    return compute_ece(dist_hat_w_BWD, w_0_BW, ECE_bins)
 
 def compute_ece(p_w_BWD: Tensor, w_0_BW: Tensor, ECE_bins: int) -> float:
     # Get the maximum probability for each sample

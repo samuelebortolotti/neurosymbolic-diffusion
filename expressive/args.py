@@ -87,7 +87,7 @@ class PathPlanningArguments(AbsArguments):
     wandb_resume_id: Optional[str] = None
 
     # Tuned hyperparameters 
-    beta: float = 12
+    beta: float = 12.0
     lr: float = 0.0005
     entropy_weight: float = 0.002
     w_denoise_weight: float = 0.00001

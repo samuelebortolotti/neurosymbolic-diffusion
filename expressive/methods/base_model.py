@@ -75,6 +75,10 @@ class BaseNeSyDiffusion(nn.Module, ABC):
             i_w_SB = self.sample_masked_indices(is_masked_SBW)
 
             # Decide whether to accept in w or y
+            accept_w_SB = None
+            is_masked_SBY = None
+            i_y_SB = None
+
             if only_w:
                 mask = torch.zeros_like(w_n_SBW, dtype=torch.bool)
                 mask[
