@@ -55,7 +55,7 @@ class AbsArguments(Arguments):
 
 
 class MNISTArguments(Tap):
-    N: int = 4
+    N: int = 1
     op: str = "sum"
     batch_size: int = 16
     batch_size_test: int = 16

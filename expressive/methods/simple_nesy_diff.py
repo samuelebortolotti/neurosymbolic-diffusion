@@ -11,7 +11,7 @@ from torch.nn.functional import one_hot
 from torch.distributions import Categorical
 
 from expressive.methods.logger import TrainingLog
-
+from expressive.util import int_to_digit_tensor
 
 class SimpleNeSyDiffusion(BaseNeSyDiffusion):
     """This model adds conditioning to y when generating w, essentially interleaving their computation. 
@@ -29,7 +29,7 @@ class SimpleNeSyDiffusion(BaseNeSyDiffusion):
         """
 
         # Compute loo baselines, but only for dimensions where at least two samples are different from w0 (otherwise the baseline is not defined)
-        baseline_SBD = (torch.sum(reward_SBD, dim=0) - reward_SBD) / (reward_SBD.shape[0] - 1)
+        baseline_SBD = (torch.sum(reward_SBD, dim=0) - reward_SBD) / (reward_SBD.shape[0] - 1) # remove the current, averaging the others.
 
         # Compute RLOO gradient via rho
         rho_BD = torch.mean(
@@ -75,6 +75,8 @@ class SimpleNeSyDiffusion(BaseNeSyDiffusion):
             torch.zeros_like(y_0_BY[..., 0], device=bm_BW.device),
         )
 
+        # TODO: for concept supervision, I just need to override the concepts
+
         # TODO: H (entropy)
         # Sample w_0
         w_1_BW = torch.full(
@@ -110,7 +112,18 @@ class SimpleNeSyDiffusion(BaseNeSyDiffusion):
         tw_0_SBW = safe_sample_categorical(tw_0, (self.args.loss_S,))
 
         # Compute deterministic function for tw_0, with carry-over unmasking on y_t_BY
-        ty_0_SBY = self.problem.y_from_w(tw_0_SBW)
+        tw_one_hot = torch.nn.functional.one_hot(tw_0_SBW, num_classes=self.problem.shape_w()[-1]) # [1024, 16, 4, 10]
+        tw_one_hot = tw_one_hot.view(tw_one_hot.shape[0], tw_one_hot.shape[1], -1).float() # [1024, 16, 40] TODO: consider also the outer product
+        pty_0_SBY = torch.nn.functional.softmax(self.inference_layer(tw_one_hot), dim=-1) # self.problem.y_from_w(tw_0_SBW) [1024, 16, 19]
+        ty_0_SBY = torch.argmax(pty_0_SBY, dim=-1) # [1024, 16]
+        ty_0_SBY = int_to_digit_tensor(ty_0_SBY, self.problem.out_digits)
+
+        # LINEAR CE
+        digits = y_0_BY  # shape: (Y, D)
+        powers_of_10 = 10 ** torch.arange(digits.shape[-1] - 1, -1, -1, device=digits.device) # (D)
+        combinedY = (digits * powers_of_10).sum(dim=-1)  # shape: (16)
+
+        linear_layer_ce = torch.nn.functional.nll_loss(pty_0_SBY[0, :, :].log(), combinedY)
 
         #####################
         # LOSS FUNCTIONS
@@ -128,7 +141,7 @@ class SimpleNeSyDiffusion(BaseNeSyDiffusion):
         log_probs_SB = tw_0.log_prob(tw_0_SBW).sum(-1)
         # Compute all constraints for y
         constraint_y0_SBY = (y_0_BY[None, :, :] == ty_0_SBY).float()
-        reward_y_0_SBY = constraint_y0_SBY
+        reward_y_0_SBY = constraint_y0_SBY # p_y_given_w(ty_0_SBY, y_0_BY)  # shape: [S, B, Y]  constraint_y0_SBY
 
         # Compute the RLOO loss for all constraints. Uses LOO with w0 injection
         L_denoising_BY = self.rloo_loss(
@@ -174,4 +187,5 @@ class SimpleNeSyDiffusion(BaseNeSyDiffusion):
             - self.args.entropy_weight * q_entropy
             # Note: Already gets negated through self.loss_weight
             + self.args.entropy_weight * L_entropy_denoising
+            + linear_layer_ce
         )

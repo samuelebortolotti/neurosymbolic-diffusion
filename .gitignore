@@ -30,3 +30,4 @@ rssgen/rssgen.egg-info/
 *.pt
 
 *.DS_Store
+venv

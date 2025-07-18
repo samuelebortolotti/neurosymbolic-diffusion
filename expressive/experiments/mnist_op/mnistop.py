@@ -99,7 +99,6 @@ def main():
         batch_size=args.batch_size,
         n_operands=n_operands,
         op=op,
-        # This shuffle is very weird...
         shuffle=True,
     )
 

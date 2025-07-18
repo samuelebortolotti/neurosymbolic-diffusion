@@ -53,6 +53,8 @@ class MNISTAbsorbModel(UnmaskingModel):
 class MNISTAddProblem(Problem):
     def __init__(self, args: MNISTAbsorbingArguments):
         self.N: int = args.N
+        self.out_dim = 19
+        self.out_digits = 2
 
     @override
     def shape_w(self) -> torch.Size:

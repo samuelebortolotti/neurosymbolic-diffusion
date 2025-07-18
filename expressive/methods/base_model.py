@@ -1,6 +1,7 @@
 from typing import Dict, Optional, Tuple
 import numpy as np
 from torch import Tensor, nn
+import math
 from abc import ABC, abstractmethod
 
 import torch
@@ -40,6 +41,7 @@ class BaseNeSyDiffusion(nn.Module, ABC):
         self.p = p
         self.q_w = ForwardAbsorbing(problem.shape_w()[-1])
         self.problem = problem
+        self.inference_layer = nn.Linear(math.prod(problem.shape_w()), problem.out_dim)
         self.args = args
         if args.entropy_variant == "exact_conditional" and (not hasattr(args, "dataset") or args.dataset != "boia"):
             all_assignments_MW, all_y_outs_MY = get_models(problem)

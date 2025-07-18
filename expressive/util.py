@@ -178,3 +178,20 @@ def compute_ece(p_w_BWD: Tensor, w_0_BW: Tensor, ECE_bins: int) -> float:
     # Compute the ECE
     ece_W = torch.sum((count_card_bin_WM / p_w_BWD.shape[0]) * torch.abs(bin_accuracies_WM - bin_confidences_WM), dim=-1)
     return ece_W.mean().item()
+
+def int_to_digit_tensor(x: torch.Tensor, num_digits: int) -> torch.Tensor:
+    """
+    Convert a tensor of shape [B, T] to [B, T, num_digits] with each integer
+    converted to its decimal digits, left-padded with zeros.
+    """
+    assert x.ndim == 2, "Input must be of shape [B, T]"
+    B, T = x.shape
+
+    # Allocate output tensor
+    digits = torch.zeros((B, T, num_digits), dtype=torch.long, device=x.device)
+
+    for d in reversed(range(num_digits)):
+        digits[..., d] = x % 10
+        x = x // 10
+
+    return digits
