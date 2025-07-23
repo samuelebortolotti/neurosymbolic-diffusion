@@ -181,17 +181,27 @@ def compute_ece(p_w_BWD: Tensor, w_0_BW: Tensor, ECE_bins: int) -> float:
 
 def int_to_digit_tensor(x: torch.Tensor, num_digits: int) -> torch.Tensor:
     """
-    Convert a tensor of shape [B, T] to [B, T, num_digits] with each integer
-    converted to its decimal digits, left-padded with zeros.
-    """
-    assert x.ndim == 2, "Input must be of shape [B, T]"
-    B, T = x.shape
+    Convert a tensor of integers to their decimal digit representation.
 
-    # Allocate output tensor
+    Supports input shapes:
+    - [B] → [B, num_digits]
+    - [B, T] → [B, T, num_digits]
+
+    Each integer is converted to its decimal digits, left-padded with zeros.
+    """
+    if x.ndim == 1:
+        x = x.unsqueeze(-1)  # [B] → [B, 1]
+        squeeze_result = True
+    elif x.ndim == 2:
+        squeeze_result = False
+    else:
+        raise ValueError(f"Input must be 1D or 2D (got shape {x.shape})")
+
+    B, T = x.shape
     digits = torch.zeros((B, T, num_digits), dtype=torch.long, device=x.device)
 
     for d in reversed(range(num_digits)):
         digits[..., d] = x % 10
         x = x // 10
 
-    return digits
+    return digits.squeeze(1) if squeeze_result else digits

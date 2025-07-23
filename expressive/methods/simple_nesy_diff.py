@@ -112,8 +112,9 @@ class SimpleNeSyDiffusion(BaseNeSyDiffusion):
         tw_0_SBW = safe_sample_categorical(tw_0, (self.args.loss_S,))
 
         # Compute deterministic function for tw_0, with carry-over unmasking on y_t_BY
-        tw_one_hot = torch.nn.functional.one_hot(tw_0_SBW, num_classes=self.problem.shape_w()[-1]) # [1024, 16, 4, 10]
-        tw_one_hot = tw_one_hot.view(tw_one_hot.shape[0], tw_one_hot.shape[1], -1).float() # [1024, 16, 40] TODO: consider also the outer product
+        tw_one_hot = torch.nn.functional.one_hot(tw_0_SBW, num_classes=self.problem.shape_w()[-1]).float() # [1024, 16, 2, 10]
+        # tw_one_hot = tw_one_hot.view(tw_one_hot.shape[0], tw_one_hot.shape[1], -1).float() # [1024, 16, 20]
+        tw_one_hot = (tw_one_hot[:, :, 0, :].unsqueeze(-1) @ tw_one_hot[:, :, 1, :].unsqueeze(-2)).view(tw_one_hot.shape[0], tw_one_hot.shape[1], -1) # outer product [1024, 16, 100]
         pty_0_SBY = torch.nn.functional.softmax(self.inference_layer(tw_one_hot), dim=-1) # self.problem.y_from_w(tw_0_SBW) [1024, 16, 19]
         ty_0_SBY = torch.argmax(pty_0_SBY, dim=-1) # [1024, 16]
         ty_0_SBY = int_to_digit_tensor(ty_0_SBY, self.problem.out_digits)

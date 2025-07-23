@@ -11,7 +11,7 @@ from expressive.methods.logger import PRED_TYPES_W, PRED_TYPES_Y, BOIATestLog, T
 from expressive.models.diffusion_model import WY_DATA, ForwardAbsorbing, UnmaskingModel
 from torch.distributions import Categorical
 
-from expressive.util import compute_ece, get_models, marginal_mode, safe_reward, safe_sample_categorical, true_mode
+from expressive.util import compute_ece, get_models, marginal_mode, safe_reward, safe_sample_categorical, true_mode, int_to_digit_tensor
 from torch.nn import functional as F
 
 class Problem(ABC):
@@ -41,7 +41,7 @@ class BaseNeSyDiffusion(nn.Module, ABC):
         self.p = p
         self.q_w = ForwardAbsorbing(problem.shape_w()[-1])
         self.problem = problem
-        self.inference_layer = nn.Linear(math.prod(problem.shape_w()), problem.out_dim)
+        self.inference_layer = nn.Linear(problem.shape_w()[1] ** problem.shape_w()[0], problem.out_dim)
         self.args = args
         if args.entropy_variant == "exact_conditional" and (not hasattr(args, "dataset") or args.dataset != "boia"):
             all_assignments_MW, all_y_outs_MY = get_models(problem)
@@ -483,15 +483,41 @@ class BaseNeSyDiffusion(nn.Module, ABC):
         Returns all possible methods for predicting a y from samples of w.
         """
 
-        # Marginal mode then f
-        hat_w_0_MM_BW = marginal_mode(hat_w_0_SBW)
-        hat_y_0_MMf_BY = self.problem.y_from_w(hat_w_0_MM_BW)
+        # TODO
+
+        # # Marginal mode then f
+        # hat_w_0_MM_BW = marginal_mode(hat_w_0_SBW)
+        # print(hat_w_0_MM_BW.shape)
+        # hat_y_0_MMf_BY = self.problem.y_from_w(hat_w_0_MM_BW)
+
+        hat_w_0_MM_BW = marginal_mode(hat_w_0_SBW) # [16, 2]
+        hat_w_0_MM_BW_one_hot = torch.nn.functional.one_hot(hat_w_0_MM_BW, num_classes=self.problem.shape_w()[-1]).float() # [16, 2, 10]
+        # hat_w_0_MM_BW_one_hot = hat_w_0_MM_BW_one_hot.view(hat_w_0_MM_BW_one_hot.shape[0], -1).float() # [16, 20]
+        hat_w_0_MM_BW_one_hot = (hat_w_0_MM_BW_one_hot[:, 0, :].unsqueeze(-1) @ hat_w_0_MM_BW_one_hot[:, 1, :].unsqueeze(-2)).view(hat_w_0_MM_BW_one_hot.shape[0], -1) # [16, 100]
+        pty_0_SBY = torch.nn.functional.softmax(self.inference_layer(hat_w_0_MM_BW_one_hot), dim=-1) # [16, 19]
+        ty_0_SBY = torch.argmax(pty_0_SBY, dim=-1) # [16]
+        hat_y_0_MMf_BY = int_to_digit_tensor(ty_0_SBY, self.problem.out_digits)
 
         # True mode then f
         hat_w_0_TM_BW = true_mode(hat_w_0_SBW)
-        hat_y_0_TMf_BY = self.problem.y_from_w(hat_w_0_TM_BW)
+        hat_w_0_TM_BW_one_hot = torch.nn.functional.one_hot(hat_w_0_TM_BW, num_classes=self.problem.shape_w()[-1]).float() # [16, 2, 10]
+        # hat_w_0_TM_BW_one_hot = hat_w_0_TM_BW_one_hot.view(hat_w_0_TM_BW_one_hot.shape[0], -1).float() # [16, 20]
+        hat_w_0_TM_BW_one_hot = (hat_w_0_TM_BW_one_hot[:, 0, :].unsqueeze(-1) @ hat_w_0_TM_BW_one_hot[:, 1, :].unsqueeze(-2)).view(hat_w_0_TM_BW_one_hot.shape[0], -1) # [16, 100]
+        pty_0_SBY1 = torch.nn.functional.softmax(self.inference_layer(hat_w_0_TM_BW_one_hot), dim=-1) # [16, 19]
+        ty_0_SBY1 = torch.argmax(pty_0_SBY1, dim=-1) # [16]
+        hat_y_0_TMf_BY = int_to_digit_tensor(ty_0_SBY1, self.problem.out_digits)
 
-        hat_y_0_SBY = self.problem.y_from_w(hat_w_0_SBW)
+        # print(hat_w_0_MM_BW.shape)
+        # hat_y_0_TMf_BY = self.problem.y_from_w(hat_w_0_TM_BW)
+
+        hat_w_0_SBW_one_hot = torch.nn.functional.one_hot(hat_w_0_SBW, num_classes=self.problem.shape_w()[-1]).float() # [8, 16, 2, 10]
+        # hat_w_0_SBW_one_hot = hat_w_0_SBW_one_hot.view(hat_w_0_SBW_one_hot.shape[0], hat_w_0_SBW_one_hot.shape[1], -1).float() # [8, 16, 20]
+        hat_w_0_SBW_one_hot = (hat_w_0_SBW_one_hot[:, :, 0, :].unsqueeze(-1) @ hat_w_0_SBW_one_hot[:, :, 1, :].unsqueeze(-2)).view(hat_w_0_SBW_one_hot.shape[0], hat_w_0_SBW_one_hot.shape[1], -1) # [8, 16, 100]
+        pty_0_SBY2 = torch.nn.functional.softmax(self.inference_layer(hat_w_0_SBW_one_hot), dim=-1) # [8, 16, 19]
+        ty_0_SBY2 = torch.argmax(pty_0_SBY2, dim=-1) # [8, 16]
+        hat_y_0_SBY = int_to_digit_tensor(ty_0_SBY2, self.problem.out_digits)
+
+        # hat_y_0_SBY = self.problem.y_from_w(hat_w_0_SBW)
         # f then marginal mode (This was the default in most eval)
         hat_y_0_fMM_BY = marginal_mode(hat_y_0_SBY, dim=0)
 
